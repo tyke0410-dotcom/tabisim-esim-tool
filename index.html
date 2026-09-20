@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TabiSIM eSIM発行ツール</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@400;600;700;800&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
+<style>
+  :root{
+    --brand-brown:#2A2118;
+    --brand-gold:#C4A44A;
+    --cream-50:#FDF9F2;
+    --cream-100:#F6EEDD;
+    --cream-200:#EFE0BC;
+    --border-default:#E8DFCE;
+    --border-subtle:#EFE7D8;
+    --border-accent:#C4A44A;
+    --text-primary:#2A2118;
+    --text-secondary:#6B5B45;
+    --text-tertiary:#A38F78;
+    --text-on-brand:#FDFCFA;
+    --surface-card:#FFFFFF;
+    --danger:#B3452F;
+    --radius-pill:999px;
+    --radius-md:10px;
+    --radius-card:18px;
+    --radius-notch:18px 4px 18px 18px;
+    --shadow-sm:0 1px 3px rgba(42,33,24,0.08);
+    --shadow-lg:0 10px 32px rgba(42,33,24,0.16);
+    --gradient-dawn:linear-gradient(135deg,#F6EEDD 0%,#EFE0BC 55%,#D3AD66 100%);
+    --font-serif-accent:'Shippori Mincho B1','Hiragino Mincho ProN',serif;
+    --font-sans:'Noto Sans JP',Arial,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--cream-50);font-family:var(--font-sans);color:var(--text-primary);}
+  input,select,button,textarea{font-family:var(--font-sans);}
+  input::placeholder,textarea::placeholder{color:var(--text-tertiary);}
+  a{color:inherit;}
+  table{border-collapse:collapse;width:100%;}
+  button{cursor:pointer;}
+  .hidden{display:none !important;}
+
+  /* ---- Login screen ---- */
+  #loginScreen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:32px;}
+  .login-box{width:100%;max-width:1000px;min-height:520px;display:flex;flex-wrap:wrap;border-radius:var(--radius-card);overflow:hidden;box-shadow:var(--shadow-lg);background:var(--surface-card);}
+  .login-brand{flex:1 1 400px;min-width:320px;background:var(--gradient-dawn);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;padding:64px 48px;}
+  .login-brand h1{font-family:var(--font-serif-accent);font-weight:700;font-size:32px;color:var(--brand-brown);margin:0;letter-spacing:1px;}
+  .login-brand p{margin:0;font-size:14px;color:var(--text-secondary);text-align:center;line-height:1.6;}
+  .login-form-panel{flex:1 1 420px;min-width:320px;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:64px 56px;}
+  .login-form-inner{width:260px;display:flex;flex-direction:column;gap:14px;}
+  .login-form-inner h2{margin:0 0 4px 0;font-size:16px;font-weight:700;color:var(--text-primary);}
+  .pill-row{display:flex;gap:6px;}
+  .mode-pill{flex:1;text-align:center;padding:7px 10px;border-radius:var(--radius-pill);font-size:12px;font-weight:500;border:1px solid var(--border-default);cursor:pointer;background:transparent;color:var(--text-secondary);}
+  .mode-pill.active{background:var(--brand-brown);color:var(--text-on-brand);border-color:var(--brand-brown);}
+  .staff-input{width:100%;box-sizing:border-box;padding:10px 14px;border-radius:var(--radius-pill);background:var(--cream-50);border:1px solid var(--border-default);font-size:13px;color:var(--text-primary);outline:none;}
+  .staff-input:focus{border-color:var(--border-accent);}
+  .login-btn{width:100%;padding:10px 0;border-radius:var(--radius-pill);background:var(--brand-gold);color:var(--brand-brown);border:none;font-size:14px;font-weight:700;}
+  .login-btn:active{transform:scale(0.98);}
+  .login-error{min-height:16px;font-size:12px;color:#a54528;}
+
+  /* ---- App ---- */
+  #appHeader{background:var(--gradient-dawn);padding:28px 40px;display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start;justify-content:space-between;}
+  #appHeader h1{margin:0;font-family:var(--font-serif-accent);font-weight:700;font-size:26px;color:var(--brand-brown);}
+  #appHeader .sub{margin:6px 0 0;font-size:13px;color:var(--text-secondary);}
+  #appHeader .staffline{margin:4px 0 0;font-size:12px;color:var(--text-tertiary);}
+  .icon-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--radius-pill);background:var(--surface-card);color:var(--brand-brown);border:1px solid var(--brand-brown);font-size:12px;font-weight:500;}
+  .icon-btn:hover{background:var(--cream-100);}
+  .content-wrap{max-width:1280px;margin:0 auto;padding:32px 40px;display:flex;flex-direction:column;gap:24px;}
+  .card{background:var(--surface-card);border:1px solid var(--border-subtle);border-radius:var(--radius-card);box-shadow:var(--shadow-sm);padding:24px;}
+  .card h2{margin:0 0 14px 0;font-size:15px;font-weight:700;color:var(--text-primary);}
+  .source-row{display:flex;gap:10px;margin-bottom:14px;}
+  .source-pill{flex:1;display:flex;align-items:center;gap:8px;padding:10px 14px;border-radius:var(--radius-md);border:1px solid var(--border-default);background:var(--surface-card);cursor:pointer;font-size:14px;}
+  .source-pill.active{border:1.5px solid var(--border-accent);}
+  .dot-outer{width:16px;height:16px;border-radius:50%;border:1.5px solid var(--border-default);display:inline-flex;align-items:center;justify-content:center;flex:none;}
+  .source-pill.active .dot-outer{border-color:var(--brand-gold);}
+  .dot-inner{width:8px;height:8px;border-radius:50%;background:transparent;}
+  .source-pill.active .dot-inner{background:var(--brand-gold);}
+  .manage-id-row{display:flex;flex-direction:column;gap:6px;font-size:12px;font-weight:500;color:var(--text-secondary);}
+  .manage-id-inputs{display:flex;gap:8px;}
+  .field-input{flex:1;min-width:0;padding:10px 14px;border-radius:var(--radius-md);border:1px solid var(--border-default);background:var(--surface-card);font-size:14px;color:var(--text-primary);outline:none;}
+  .field-input:focus{border-color:var(--border-accent);}
+  .square-btn{flex:none;width:38px;height:38px;border-radius:var(--radius-pill);border:1px solid var(--border-default);background:var(--surface-card);color:var(--brand-brown);display:flex;align-items:center;justify-content:center;font-size:16px;}
+  .square-btn:hover{background:var(--cream-100);}
+  .section-head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;}
+  .section-head h2{margin:0;font-size:15px;font-weight:700;}
+  #recipientsGrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:20px;}
+  .recipient-card{background:var(--surface-card);border:1px solid var(--border-subtle);border-radius:var(--radius-card);box-shadow:var(--shadow-sm);padding:22px;display:flex;flex-direction:column;gap:14px;}
+  .recipient-head{display:flex;align-items:center;justify-content:space-between;}
+  .recipient-head .title{font-size:14px;font-weight:700;}
+  .badge{padding:4px 12px;border-radius:var(--radius-pill);background:var(--cream-100);color:var(--brand-brown);font-size:12px;font-weight:700;}
+  .icon-round{width:28px;height:28px;border-radius:50%;border:1px solid var(--border-default);background:var(--surface-card);color:var(--text-secondary);display:flex;align-items:center;justify-content:center;font-size:14px;}
+  .icon-round:hover{background:var(--cream-100);color:var(--danger);}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .small-input{padding:9px 12px;border-radius:var(--radius-md);border:1px solid var(--border-default);background:var(--surface-card);font-size:12px;color:var(--text-primary);outline:none;width:100%;}
+  .small-input:focus{border-color:var(--border-accent);}
+  .field-note{font-size:10px;color:var(--text-tertiary);}
+  .divider{height:1px;background:var(--border-subtle);}
+  .esim-chip{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 12px;border-radius:var(--radius-md);background:var(--cream-50);border:1px solid var(--border-subtle);font-size:12px;}
+  .esim-chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .chip-x{flex:none;width:20px;height:20px;border-radius:50%;border:none;background:transparent;color:var(--text-tertiary);display:flex;align-items:center;justify-content:center;font-size:13px;}
+  .chip-x:hover{color:var(--danger);}
+  .no-esim-note{font-size:12px;color:var(--text-tertiary);}
+  .draft-row{display:flex;gap:12px;align-items:flex-start;}
+  .draft-add-btn{align-self:flex-start;display:inline-flex;align-items:center;gap:6px;padding:9px 16px;border-radius:var(--radius-pill);background:var(--surface-card);color:var(--brand-brown);border:1px solid var(--brand-brown);font-size:12px;font-weight:500;}
+  .draft-add-btn:hover{background:var(--cream-100);}
+  .draft-qr-preview{flex:none;display:flex;flex-direction:column;align-items:center;gap:4px;}
+  .draft-qr-preview img{width:72px;height:72px;border-radius:8px;border:1px solid var(--border-subtle);background:#fff;}
+  .send-row{display:flex;align-items:center;justify-content:flex-end;gap:16px;flex-wrap:wrap;}
+  .send-row .note{font-size:12px;color:var(--text-secondary);}
+  .send-btn{display:inline-flex;align-items:center;gap:8px;padding:13px 24px;border-radius:var(--radius-pill);background:var(--brand-gold);color:var(--brand-brown);border:none;font-size:14px;font-weight:700;}
+  .send-btn:disabled{background:var(--cream-200);color:var(--text-tertiary);cursor:not-allowed;}
+  .add-recipient-btn{display:inline-flex;align-items:center;gap:6px;padding:9px 18px;border-radius:var(--radius-pill);background:var(--surface-card);color:var(--brand-brown);border:1px solid var(--brand-brown);font-size:12px;font-weight:500;}
+  .add-recipient-btn:disabled{background:var(--cream-100);color:var(--text-tertiary);border-color:var(--border-subtle);cursor:not-allowed;}
+  .history-wrap{overflow-x:auto;max-height:360px;overflow-y:auto;border-radius:var(--radius-md);border:1px solid var(--border-subtle);}
+  .history-wrap th{position:sticky;top:0;background:var(--cream-50);text-align:left;padding:10px 14px;font-size:12px;font-weight:700;color:var(--text-secondary);border-bottom:1px solid var(--border-subtle);}
+  .history-wrap td{padding:10px 14px;font-size:12px;color:var(--text-primary);border-bottom:1px solid var(--border-subtle);}
+  .history-wrap tr:hover td{background:var(--cream-50);}
+
+  #toastContainer{position:fixed;bottom:24px;right:24px;display:flex;flex-direction:column;gap:8px;z-index:999;}
+  .toast{padding:12px 18px;border-radius:var(--radius-md);font-size:13px;box-shadow:var(--shadow-lg);color:#fff;max-width:360px;}
+  .toast.success{background:#3E6B4F;}
+  .toast.error{background:var(--danger);}
+  .toast.info{background:var(--brand-brown);}
+
+  @media (max-width:640px){
+    #appHeader,.content-wrap{padding-left:16px;padding-right:16px;}
+    .grid2{grid-template-columns:1fr;}
+  }
+</style>
+</head>
+<body>
+
+<div id="loginScreen">
+  <div class="login-box">
+    <div class="login-brand">
+      <h1>TabiSIM</h1>
+      <p>eSIM発行ツール<br>スタッフ専用</p>
+    </div>
+    <div class="login-form-panel">
+      <div class="login-form-inner">
+        <h2>ログイン</h2>
+        <div class="pill-row" id="loginModePills"></div>
+        <div style="display:flex;flex-direction:column;gap:10px;">
+          <input class="staff-input" type="text" id="loginId" placeholder="ID" autocomplete="username">
+          <input class="staff-input" type="password" id="loginPassword" placeholder="パスワード" autocomplete="current-password">
+        </div>
+        <button class="login-btn" id="loginBtn">ログイン</button>
+        <div class="login-error" id="loginError"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="appContent" class="hidden">
+  <div id="appHeader">
+    <div>
+      <h1>TabiSIM eSIM 発行ツール</h1>
+      <p class="sub">複数のeSIMを最大10宛先までまとめて送信 - Google Sheets 連携</p>
+      <p class="staffline">ログイン中: <span id="staffNameLabel"></span></p>
+      <div class="pill-row" id="appModePills" style="margin-top:12px;max-width:220px;"></div>
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:10px;margin-top:36px;">
+      <div style="display:flex;gap:8px;">
+        <button class="icon-btn" id="resetBtn">↺ リセット</button>
+        <button class="icon-btn" id="logoutBtn">⎋ ログアウト</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="content-wrap">
+
+    <div class="card" style="max-width:460px;">
+      <h2>1. 注文元</h2>
+      <div class="source-row" id="sourceRow"></div>
+      <label class="manage-id-row">
+        社内管理番号
+        <div class="manage-id-inputs">
+          <input type="text" class="field-input" id="manageIdInput" placeholder="OTS0000001">
+          <button class="square-btn" id="genIdBtn" title="自動採番">⟳</button>
+        </div>
+      </label>
+    </div>
+
+    <div class="section-head">
+      <h2 id="recipientCountLabel">2. 宛先リスト (0/10)</h2>
+      <button class="add-recipient-btn" id="addRecipientBtn">＋ 宛先を追加</button>
+    </div>
+
+    <div id="recipientsGrid"></div>
+
+    <div class="send-row">
+      <span class="note" id="sendNote"></span>
+      <button class="send-btn" id="sendBulkBtn" disabled>まとめて送信 (0名)</button>
+    </div>
+
+    <div class="card">
+      <div class="section-head" style="margin-bottom:16px;">
+        <h2>送信履歴</h2>
+        <div style="display:flex;gap:8px;">
+          <button class="icon-btn" id="refreshHistoryBtn">⟳ 更新</button>
+          <button class="icon-btn" id="exportCsvBtn">⇩ CSV出力</button>
+        </div>
+      </div>
+      <div class="history-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>日時</th><th>注文元/管理番号</th><th>区分</th><th>宛先(CC)</th><th>言語</th><th>パートナー番号/理由</th><th>プラン/ICCID</th>
+            </tr>
+          </thead>
+          <tbody id="historyBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div id="toastContainer"></div>
+
+<script>
+// =========================================================================
+// システム設定 - 実際の値に書き換えてください
+// =========================================================================
+const GAS_URL = "https://script.google.com/macros/s/AKfycbxDjkTIS9ln-ZTspSsthd-G0DAnDw9haDkynQlCwCV8RkuOjZhWjIZOdYvtQWinJcgeyA/exec";
+const SHEET_URL = "https://docs.google.com/spreadsheets/d/1dqiC0DaRtQ__S2Rcm8QEV_00CsSBKwS25x5rulA0vSk/edit";
+const SHEET_TAB_NAME = ""; // 空文字=シートの最初のタブを自動使用(GAS側がフォールバック)
+
+const MODES = [{code:'purchase',label:'新規購入版'},{code:'free',label:'無償提供版'}];
+const SOURCES = [{code:'ots',label:'OTS予約'},{code:'other',label:'その他'}];
+const REASONS = [
+  {code:'campaign',label:'キャンペーン提供'},
+  {code:'support',label:'トラブル対応'},
+  {code:'internal',label:'社内検証'},
+  {code:'other',label:'その他'}
+];
+const MAIL_LANGS = [
+  {code:'zh',label:'繁体字中国語'},
+  {code:'ja',label:'日本語'},
+  {code:'en',label:'English'},
+  {code:'ko',label:'한국어'}
+];
+
+// ---- State ----
+let sessionToken = sessionStorage.getItem('tabisim_session_token') || null;
+let staffName = sessionStorage.getItem('tabisim_staff_name') || '';
+let currentMode = localStorage.getItem('tabisim_staff_mode') || 'purchase';
+let orderSource = 'ots';
+let manageId = '';
+let nextManageSeq = 1;
+let nextRecipientId = 2;
+let recipients = [makeRecipient(1)];
+let historyData = [];
+
+function makeDraft(){ return { partnerOrderNo:'', reason:'campaign', iccid:'', planName:'', lpaCode:'', qrDataUrl:'', iosLink:'' }; }
+function makeRecipient(id){ return { id, email:'', cc:'', name:'', mailLang:'ja', esims:[], draft: makeDraft() }; }
+function formatManageId(seq, source){ return (source==='ots' ? 'OTS' : 'OTH') + String(seq).padStart(7,'0'); }
+function esc(s){ return (s==null?'':String(s)).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+function showToast(message, type){
+  const el = document.createElement('div');
+  el.className = 'toast ' + (type || 'info');
+  el.textContent = message;
+  document.getElementById('toastContainer').appendChild(el);
+  setTimeout(() => el.remove(), 5000);
+}
+
+// ---- QR generation (client-side, no external network dependency) ----
+function generateQrDataUrl(text){
+  if (!text) return '';
+  try {
+    const canvas = document.createElement('canvas');
+    new QRious({ element: canvas, value: text, size: 300, level: 'M' });
+    return canvas.toDataURL('image/png');
+  } catch(e){ return ''; }
+}
+
+// =========================================================================
+// ログイン
+// =========================================================================
+function renderModePills(containerId){
+  const el = document.getElementById(containerId);
+  el.innerHTML = MODES.map(m =>
+    '<button type="button" class="mode-pill' + (currentMode===m.code?' active':'') + '" data-mode="' + m.code + '">' + m.label + '</button>'
+  ).join('');
+  el.querySelectorAll('[data-mode]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      currentMode = btn.getAttribute('data-mode');
+      localStorage.setItem('tabisim_staff_mode', currentMode);
+      renderModePills('loginModePills');
+      renderModePills('appModePills');
+      renderRecipients();
+    });
+  });
+}
+
+async function doLogin(){
+  const username = document.getElementById('loginId').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  const errorEl = document.getElementById('loginError');
+  errorEl.textContent = '';
+  if (!username || !password){
+    errorEl.textContent = 'IDとパスワードを入力してください';
+    return;
+  }
+  try {
+    const res = await fetch(GAS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action:'login', username, password })
+    });
+    const json = await res.json();
+    if (json.status === 'success'){
+      sessionToken = json.session_token;
+      staffName = json.display_name;
+      sessionStorage.setItem('tabisim_session_token', sessionToken);
+      sessionStorage.setItem('tabisim_staff_name', staffName);
+      showApp();
+    } else {
+      errorEl.textContent = json.message || 'ログインに失敗しました';
+    }
+  } catch(e){
+    errorEl.textContent = '通信エラー: ' + e.message;
+  }
+}
+
+function logout(){
+  sessionStorage.removeItem('tabisim_session_token');
+  sessionStorage.removeItem('tabisim_staff_name');
+  sessionToken = null;
+  showLogin();
+}
+
+function handleUnauthorized(){
+  showToast('セッションの有効期限が切れました。再度ログインしてください。', 'error');
+  logout();
+}
+
+function showApp(){
+  document.getElementById('loginScreen').classList.add('hidden');
+  document.getElementById('appContent').classList.remove('hidden');
+  document.getElementById('staffNameLabel').textContent = staffName;
+  renderModePills('appModePills');
+  renderSourceRow();
+  renderRecipients();
+  fetchHistory();
+}
+function showLogin(){
+  document.getElementById('appContent').classList.add('hidden');
+  document.getElementById('loginScreen').classList.remove('hidden');
+  document.getElementById('loginId').value = '';
+  document.getElementById('loginPassword').value = '';
+  document.getElementById('loginError').textContent = '';
+  renderModePills('loginModePills');
+}
+
+// =========================================================================
+// 注文元 / 管理番号
+// =========================================================================
+function renderSourceRow(){
+  const el = document.getElementById('sourceRow');
+  el.innerHTML = SOURCES.map(s =>
+    '<div class="source-pill' + (orderSource===s.code?' active':'') + '" data-source="' + s.code + '">'
+    + '<span class="dot-outer"><span class="dot-inner"></span></span>' + s.label + '</div>'
+  ).join('');
+  el.querySelectorAll('[data-source]').forEach(pill => {
+    pill.addEventListener('click', () => {
+      orderSource = pill.getAttribute('data-source');
+      if (!manageId){
+        manageId = formatManageId(nextManageSeq, orderSource);
+        nextManageSeq++;
+        document.getElementById('manageIdInput').value = manageId;
+      }
+      renderSourceRow();
+    });
+  });
+  document.getElementById('manageIdInput').value = manageId;
+}
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('manageIdInput').addEventListener('input', (e) => { manageId = e.target.value; });
+  document.getElementById('genIdBtn').addEventListener('click', () => {
+    manageId = formatManageId(nextManageSeq, orderSource);
+    nextManageSeq++;
+    document.getElementById('manageIdInput').value = manageId;
+  });
+});
+
+// =========================================================================
+// 宛先リスト / eSIM
+// =========================================================================
+function renderRecipients(){
+  const grid = document.getElementById('recipientsGrid');
+  grid.innerHTML = recipients.map(r => renderRecipientCard(r)).join('');
+  document.getElementById('recipientCountLabel').textContent = '2. 宛先リスト (' + recipients.length + '/10)';
+
+  const addBtn = document.getElementById('addRecipientBtn');
+  addBtn.disabled = recipients.length >= 10;
+
+  const ready = recipients.filter(r => r.email.trim() && r.esims.length > 0);
+  const totalEsims = recipients.reduce((sum, r) => sum + r.esims.length, 0);
+  document.getElementById('sendNote').textContent =
+    (currentMode === 'free' ? '無償提供メールで送信されます' : '新規購入メールで送信されます')
+    + ' ・ ' + ready.length + '名 / eSIM合計 ' + totalEsims + '件';
+  const sendBtn = document.getElementById('sendBulkBtn');
+  sendBtn.disabled = ready.length === 0;
+  sendBtn.textContent = 'まとめて送信 (' + ready.length + '名)';
+}
+
+function renderRecipientCard(r){
+  const esimsHtml = r.esims.length
+    ? r.esims.map((es, ei) =>
+        '<div class="esim-chip"><span>' + esc(es.planName || '(プラン名未入力)') + ' / ICCID ' + esc(es.iccid || '-') + '</span>'
+        + '<button class="chip-x" data-action="remove-esim" data-rid="' + r.id + '" data-eindex="' + ei + '">✕</button></div>'
+      ).join('')
+    : '<span class="no-esim-note">まだeSIMが追加されていません</span>';
+
+  const refFieldHtml = currentMode === 'free'
+    ? '<select class="small-input" data-action="update-draft" data-field="reason" data-rid="' + r.id + '">'
+        + REASONS.map(rs => '<option value="' + rs.code + '"' + (r.draft.reason===rs.code?' selected':'') + '>' + rs.label + '</option>').join('')
+      + '</select>'
+    : '<input type="text" class="small-input" placeholder="パートナー注文番号" value="' + esc(r.draft.partnerOrderNo) + '" data-action="update-draft" data-field="partnerOrderNo" data-rid="' + r.id + '">';
+
+  const qrPreviewHtml = r.draft.qrDataUrl
+    ? '<div class="draft-qr-preview"><img src="' + r.draft.qrDataUrl + '" alt="QRコード"><span class="field-note">自動生成</span></div>'
+    : '';
+
+  return ''
+    + '<div class="recipient-card">'
+    + '<div class="recipient-head"><span class="title">宛先 ' + (recipients.indexOf(r)+1) + '</span>'
+    + '<div style="display:flex;align-items:center;gap:10px;">'
+    + '<span class="badge">eSIM: ' + r.esims.length + '件</span>'
+    + '<button class="icon-round" data-action="remove-recipient" data-rid="' + r.id + '">🗑</button>'
+    + '</div></div>'
+    + '<div class="grid2">'
+    + '<input type="email" class="small-input" placeholder="お客様メールアドレス" value="' + esc(r.email) + '" data-action="update-recipient" data-field="email" data-rid="' + r.id + '" style="grid-column:1/2;">'
+    + '<input type="email" class="small-input" placeholder="CCメール" value="' + esc(r.cc) + '" data-action="update-recipient" data-field="cc" data-rid="' + r.id + '">'
+    + '<input type="text" class="small-input" placeholder="お客様氏名" value="' + esc(r.name) + '" data-action="update-recipient" data-field="name" data-rid="' + r.id + '">'
+    + '<label style="display:flex;flex-direction:column;gap:3px;">'
+    + '<select class="small-input" data-action="update-recipient" data-field="mailLang" data-rid="' + r.id + '">'
+    + MAIL_LANGS.map(l => '<option value="' + l.code + '"' + (r.mailLang===l.code?' selected':'') + '>' + l.label + '</option>').join('')
+    + '</select><span class="field-note">※お客様に送るメールの言語です</span></label>'
+    + '</div>'
+    + '<div class="divider"></div>'
+    + '<div style="display:flex;flex-direction:column;gap:6px;">' + esimsHtml + '</div>'
+    + '<div class="grid2">'
+    + refFieldHtml
+    + '<input type="text" class="small-input" placeholder="ICCID番号" value="' + esc(r.draft.iccid) + '" data-action="update-draft" data-field="iccid" data-rid="' + r.id + '">'
+    + '<input type="text" class="small-input" placeholder="プラン名 (例: 日本 5日間 3GB)" value="' + esc(r.draft.planName) + '" data-action="update-draft" data-field="planName" data-rid="' + r.id + '" style="grid-column:1/-1;">'
+    + '</div>'
+    + '<div class="draft-row">'
+    + '<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:8px;">'
+    + '<input type="text" class="small-input" placeholder="LPAコード貼り付け (LPA:1$...)" value="' + esc(r.draft.lpaCode) + '" data-action="update-draft" data-field="lpaCode" data-rid="' + r.id + '">'
+    + '<button class="draft-add-btn" data-action="add-esim" data-rid="' + r.id + '">＋ 追加</button>'
+    + '<span class="field-note">※LPAコードを貼り付けると自動でQR生成されます</span>'
+    + '</div>' + qrPreviewHtml
+    + '</div>'
+    + '</div>';
+}
+
+document.getElementById('recipientsGrid').addEventListener('input', (e) => {
+  const t = e.target.closest('[data-action]');
+  if (!t) return;
+  const rid = Number(t.getAttribute('data-rid'));
+  const r = recipients.find(x => x.id === rid);
+  if (!r) return;
+  const field = t.getAttribute('data-field');
+
+  if (t.getAttribute('data-action') === 'update-recipient'){
+    r[field] = t.value;
+  } else if (t.getAttribute('data-action') === 'update-draft'){
+    r.draft[field] = t.value;
+    if (field === 'lpaCode'){
+      r.draft.qrDataUrl = generateQrDataUrl(t.value.trim());
+      renderRecipients();
+    }
+  }
+});
+
+document.getElementById('recipientsGrid').addEventListener('change', (e) => {
+  const t = e.target.closest('[data-action]');
+  if (!t) return;
+  const rid = Number(t.getAttribute('data-rid'));
+  const r = recipients.find(x => x.id === rid);
+  if (!r) return;
+  const field = t.getAttribute('data-field');
+  if (t.getAttribute('data-action') === 'update-recipient') r[field] = t.value;
+  else if (t.getAttribute('data-action') === 'update-draft') r.draft[field] = t.value;
+});
+
+document.getElementById('recipientsGrid').addEventListener('click', (e) => {
+  const t = e.target.closest('[data-action]');
+  if (!t) return;
+  const rid = Number(t.getAttribute('data-rid'));
+  const action = t.getAttribute('data-action');
+
+  if (action === 'remove-recipient'){
+    recipients = recipients.filter(x => x.id !== rid);
+    if (recipients.length === 0) recipients = [makeRecipient(nextRecipientId++)];
+    renderRecipients();
+  } else if (action === 'remove-esim'){
+    const r = recipients.find(x => x.id === rid);
+    const ei = Number(t.getAttribute('data-eindex'));
+    if (r) r.esims.splice(ei, 1);
+    renderRecipients();
+  } else if (action === 'add-esim'){
+    const r = recipients.find(x => x.id === rid);
+    if (!r) return;
+    if (!r.draft.iccid && !r.draft.lpaCode){ showToast('ICCIDまたはLPAコードを入力してください', 'error'); return; }
+    const lpaCode = r.draft.lpaCode.trim();
+    const qrDataUrl = lpaCode ? (r.draft.qrDataUrl || generateQrDataUrl(lpaCode)) : '';
+    const iosLink = lpaCode ? ('https://esimsetup.apple.com/esim_qrcode_provisioning?carddata=' + encodeURIComponent(lpaCode)) : '';
+    r.esims.push({
+      partnerOrderNo: r.draft.partnerOrderNo,
+      reason: r.draft.reason,
+      iccid: r.draft.iccid,
+      planName: r.draft.planName,
+      lpaCode: lpaCode,
+      qrDataUrl: qrDataUrl,
+      iosLink: iosLink
+    });
+    r.draft = makeDraft();
+    renderRecipients();
+  }
+});
+
+document.getElementById('addRecipientBtn').addEventListener('click', () => {
+  if (recipients.length >= 10) return;
+  recipients.push(makeRecipient(nextRecipientId++));
+  renderRecipients();
+});
+
+document.getElementById('resetBtn').addEventListener('click', () => {
+  orderSource = 'ots';
+  manageId = '';
+  nextManageSeq = 1;
+  recipients = [makeRecipient(nextRecipientId++)];
+  renderSourceRow();
+  renderRecipients();
+});
+
+document.getElementById('logoutBtn').addEventListener('click', logout);
+document.getElementById('loginBtn').addEventListener('click', doLogin);
+document.getElementById('loginPassword').addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
+
+// =========================================================================
+// 一括送信
+// =========================================================================
+document.getElementById('sendBulkBtn').addEventListener('click', async () => {
+  const ready = recipients.filter(r => r.email.trim() && r.esims.length > 0);
+  if (ready.length === 0) return;
+
+  const payload = {
+    session_token: sessionToken,
+    sheet_url: SHEET_URL,
+    sheet_tab_name: SHEET_TAB_NAME,
+    order_source_type: orderSource === 'ots' ? 'OTS' : 'Other',
+    mode: currentMode,
+    manage_id: manageId,
+    recipients: ready.map(r => ({
+      email: r.email.trim(), cc: r.cc.trim(), name: r.name.trim(), mail_language: r.mailLang,
+      esims: r.esims.map(es => ({
+        partner_order_no: es.partnerOrderNo || '',
+        reason: es.reason || '',
+        iccid: es.iccid || '',
+        package_name: es.planName || '',
+        qr_code_image: es.qrDataUrl || '',
+        ios_link: es.iosLink || '',
+        android_lpa: es.lpaCode || ''
+      }))
+    }))
+  };
+
+  const sendBtn = document.getElementById('sendBulkBtn');
+  sendBtn.disabled = true;
+  sendBtn.textContent = '送信中...';
+
+  try {
+    const res = await fetch(GAS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload)
+    });
+    const json = await res.json();
+
+    if (json.status === 'unauthorized'){ handleUnauthorized(); return; }
+
+    if (json.status === 'success'){
+      showToast(json.message || '送信完了', 'success');
+      recipients = [makeRecipient(nextRecipientId++)];
+      manageId = '';
+      document.getElementById('manageIdInput').value = '';
+      renderRecipients();
+      fetchHistory();
+    } else if (json.status === 'partial'){
+      showToast(json.message || '一部失敗しました', 'error');
+      const failed = (json.results || []).filter(r => r.status === 'error');
+      failed.forEach(f => showToast(f.email + ': ' + (f.message || '送信失敗'), 'error'));
+      recipients = [makeRecipient(nextRecipientId++)];
+      manageId = '';
+      document.getElementById('manageIdInput').value = '';
+      renderRecipients();
+      fetchHistory();
+    } else {
+      showToast(json.message || '送信に失敗しました', 'error');
+    }
+  } catch(e){
+    showToast('通信エラー: ' + e.message, 'error');
+  } finally {
+    renderRecipients();
+  }
+});
+
+// =========================================================================
+// 履歴
+// =========================================================================
+async function fetchHistory(){
+  if (!sessionToken) return;
+  try {
+    const url = GAS_URL + '?api=history'
+      + '&session_token=' + encodeURIComponent(sessionToken)
+      + '&sheet_url=' + encodeURIComponent(SHEET_URL)
+      + '&sheet_tab_name=' + encodeURIComponent(SHEET_TAB_NAME);
+    const res = await fetch(url);
+    const json = await res.json();
+    if (json.status === 'unauthorized'){ handleUnauthorized(); return; }
+    if (json.status === 'success'){
+      historyData = json.data || [];
+      renderHistory();
+    } else {
+      showToast(json.message || '履歴の取得に失敗しました', 'error');
+    }
+  } catch(e){
+    showToast('履歴取得エラー: ' + e.message, 'error');
+  }
+}
+
+function renderHistory(){
+  const body = document.getElementById('historyBody');
+  body.innerHTML = historyData.map(row => ''
+    + '<tr>'
+    + '<td>' + esc(row.time) + '</td>'
+    + '<td>' + esc(row.source) + ' / ' + esc(row.manage_id) + '</td>'
+    + '<td>' + esc(row.mode === 'free' ? '無償' : row.mode === 'purchase' ? '購入' : row.mode) + '</td>'
+    + '<td>' + esc(row.email) + (row.cc ? ' (' + esc(row.cc) + ')' : '') + '</td>'
+    + '<td>' + esc(row.mail_lang) + '</td>'
+    + '<td>' + esc(row.ref) + '</td>'
+    + '<td>' + esc(row.package_name) + ' / ' + esc(row.iccid) + '</td>'
+    + '</tr>'
+  ).join('');
+}
+
+document.getElementById('refreshHistoryBtn').addEventListener('click', fetchHistory);
+document.getElementById('exportCsvBtn').addEventListener('click', () => {
+  if (historyData.length === 0){ showToast('出力する履歴がありません', 'error'); return; }
+  const headers = ['日時','注文元','管理番号','区分','メール','CC','顧客名','言語','パートナー番号/理由','プラン','ICCID'];
+  const rows = historyData.map(r => [r.time, r.source, r.manage_id, r.mode, r.email, r.cc, r.customer_name, r.mail_lang, r.ref, r.package_name, r.iccid]);
+  const csv = [headers].concat(rows).map(row =>
+    row.map(v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"').join(',')
+  ).join('\r\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = 'tabisim_history_' + new Date().toISOString().slice(0,10) + '.csv';
+  link.click();
+});
+
+// =========================================================================
+// 初期化
+// =========================================================================
+renderModePills('loginModePills');
+if (sessionToken){ showApp(); } else { showLogin(); }
+</script>
+</body>
+</html>
