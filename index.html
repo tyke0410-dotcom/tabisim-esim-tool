@@ -243,6 +243,8 @@ const MAIL_LANGS = [
   {code:'en',label:'English'},
   {code:'ko',label:'한국어'}
 ];
+const APN_OPTIONS = ['mobile.three.com.hk', 'vmobile.jp'];
+const PLAN_OPTIONS = ['1GB/7days', '3GB/15days', '3GB/30days', '5GB/30days', '10GB/30days', '20GB/30days', '50GB/30days'];
 
 // ---- State ----
 let sessionToken = sessionStorage.getItem('tabisim_session_token') || null;
@@ -255,7 +257,7 @@ let nextRecipientId = 2;
 let recipients = [makeRecipient(1)];
 let historyData = [];
 
-function makeDraft(){ return { partnerOrderNo:'', reason:'campaign', iccid:'', planName:'', lpaCode:'', qrDataUrl:'', iosLink:'' }; }
+function makeDraft(){ return { partnerOrderNo:'', reason:'campaign', iccid:'', apn:APN_OPTIONS[0], planName:PLAN_OPTIONS[0], lpaCode:'', qrDataUrl:'', iosLink:'' }; }
 function makeRecipient(id){ return { id, email:'', cc:'', name:'', mailLang:'ja', esims:[], draft: makeDraft() }; }
 function formatManageId(seq, source){ return (source==='ots' ? 'OTS' : 'OTH') + String(seq).padStart(7,'0'); }
 function esc(s){ return (s==null?'':String(s)).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -482,7 +484,16 @@ function renderRecipientCard(r){
     + '<div class="grid2">'
     + refFieldHtml
     + '<input type="text" class="small-input" placeholder="ICCID番号" value="' + esc(r.draft.iccid) + '" data-action="update-draft" data-field="iccid" data-rid="' + r.id + '">'
-    + '<input type="text" class="small-input" placeholder="プラン名 (例: 日本 5日間 3GB)" value="' + esc(r.draft.planName) + '" data-action="update-draft" data-field="planName" data-rid="' + r.id + '" style="grid-column:1/-1;">'
+    + '<label style="display:flex;flex-direction:column;gap:3px;grid-column:1/-1;">'
+    + '<span class="field-note">APN設定</span>'
+    + '<select class="small-input" data-action="update-draft" data-field="apn" data-rid="' + r.id + '">'
+    + APN_OPTIONS.map(a => '<option value="' + a + '"' + (r.draft.apn===a?' selected':'') + '>' + a + '</option>').join('')
+    + '</select></label>'
+    + '<label style="display:flex;flex-direction:column;gap:3px;grid-column:1/-1;">'
+    + '<span class="field-note">プラン名</span>'
+    + '<select class="small-input" data-action="update-draft" data-field="planName" data-rid="' + r.id + '">'
+    + PLAN_OPTIONS.map(p => '<option value="' + p + '"' + (r.draft.planName===p?' selected':'') + '>' + p + '</option>').join('')
+    + '</select></label>'
     + '</div>'
     + '<div class="draft-row">'
     + '<div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:8px;">'
@@ -550,6 +561,7 @@ document.getElementById('recipientsGrid').addEventListener('click', (e) => {
       partnerOrderNo: r.draft.partnerOrderNo,
       reason: r.draft.reason,
       iccid: r.draft.iccid,
+      apn: r.draft.apn,
       planName: r.draft.planName,
       lpaCode: lpaCode,
       qrDataUrl: qrDataUrl,
@@ -599,6 +611,7 @@ document.getElementById('sendBulkBtn').addEventListener('click', async () => {
         partner_order_no: es.partnerOrderNo || '',
         reason: es.reason || '',
         iccid: es.iccid || '',
+        apn: es.apn || '',
         package_name: es.planName || '',
         qr_code_image: es.qrDataUrl || '',
         ios_link: es.iosLink || '',
