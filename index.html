@@ -208,7 +208,7 @@
         <table>
           <thead>
             <tr>
-              <th>日時</th><th>注文元/管理番号</th><th>区分</th><th>宛先(CC)</th><th>言語</th><th>パートナー番号/理由</th><th>プラン/ICCID</th>
+              <th>日時</th><th>注文元/管理番号</th><th>区分</th><th>宛先(CC)</th><th>言語</th><th>パートナー番号/理由</th><th>プラン/ICCID</th><th>社内メモ</th>
             </tr>
           </thead>
           <tbody id="historyBody"></tbody>
@@ -230,7 +230,11 @@ const SHEET_URL = "https://docs.google.com/spreadsheets/d/1dqiC0DaRtQ__S2Rcm8QEV
 const SHEET_TAB_NAME = ""; // 空文字=シートの最初のタブを自動使用(GAS側がフォールバック)
 
 const MODES = [{code:'purchase',label:'新規購入版'},{code:'free',label:'無償提供版'}];
-const SOURCES = [{code:'ots',label:'OTS予約'},{code:'other',label:'その他'}];
+const SOURCES = [
+  {code:'ots', label:'OTS', prefix:'OTS', sheetValue:'OTS'},
+  {code:'okinawafunpass', label:'OkinawaFunPass', prefix:'OFP', sheetValue:'OkinawaFunPass'},
+  {code:'other', label:'その他', prefix:'OTH', sheetValue:'Other'}
+];
 const REASONS = [
   {code:'campaign',label:'キャンペーン提供'},
   {code:'support',label:'トラブル対応'},
@@ -258,8 +262,11 @@ let recipients = [makeRecipient(1)];
 let historyData = [];
 
 function makeDraft(){ return { partnerOrderNo:'', reason:'campaign', iccid:'', apn:APN_OPTIONS[0], planName:PLAN_OPTIONS[0], lpaCode:'', qrDataUrl:'', iosLink:'' }; }
-function makeRecipient(id){ return { id, email:'', cc:'', name:'', mailLang:'ja', esims:[], draft: makeDraft() }; }
-function formatManageId(seq, source){ return (source==='ots' ? 'OTS' : 'OTH') + String(seq).padStart(7,'0'); }
+function makeRecipient(id){ return { id, email:'', cc:'', name:'', mailLang:'ja', memo:'', esims:[], draft: makeDraft() }; }
+function formatManageId(seq, source){
+  const src = SOURCES.find(s => s.code === source) || SOURCES[SOURCES.length - 1];
+  return src.prefix + String(seq).padStart(7,'0');
+}
 function esc(s){ return (s==null?'':String(s)).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 function showToast(message, type){
@@ -398,20 +405,16 @@ function showLogin(){
 // =========================================================================
 function renderSourceRow(){
   const el = document.getElementById('sourceRow');
-  el.innerHTML = SOURCES.map(s =>
-    '<div class="source-pill' + (orderSource===s.code?' active':'') + '" data-source="' + s.code + '">'
-    + '<span class="dot-outer"><span class="dot-inner"></span></span>' + s.label + '</div>'
-  ).join('');
-  el.querySelectorAll('[data-source]').forEach(pill => {
-    pill.addEventListener('click', () => {
-      orderSource = pill.getAttribute('data-source');
-      if (!manageId){
-        manageId = formatManageId(nextManageSeq, orderSource);
-        nextManageSeq++;
-        document.getElementById('manageIdInput').value = manageId;
-      }
-      renderSourceRow();
-    });
+  el.innerHTML = '<select class="field-input" id="sourceSelect" style="width:100%;">'
+    + SOURCES.map(s => '<option value="' + s.code + '"' + (orderSource===s.code?' selected':'') + '>' + s.label + '</option>').join('')
+    + '</select>';
+  document.getElementById('sourceSelect').addEventListener('change', (e) => {
+    orderSource = e.target.value;
+    if (!manageId){
+      manageId = formatManageId(nextManageSeq, orderSource);
+      nextManageSeq++;
+      document.getElementById('manageIdInput').value = manageId;
+    }
   });
   document.getElementById('manageIdInput').value = manageId;
 }
@@ -478,6 +481,7 @@ function renderRecipientCard(r){
     + '<select class="small-input" data-action="update-recipient" data-field="mailLang" data-rid="' + r.id + '">'
     + MAIL_LANGS.map(l => '<option value="' + l.code + '"' + (r.mailLang===l.code?' selected':'') + '>' + l.label + '</option>').join('')
     + '</select><span class="field-note">※お客様に送るメールの言語です</span></label>'
+    + '<textarea class="small-input" placeholder="社内メモ(お客様には送信されません)" rows="2" data-action="update-recipient" data-field="memo" data-rid="' + r.id + '" style="grid-column:1/-1;resize:vertical;">' + esc(r.memo) + '</textarea>'
     + '</div>'
     + '<div class="divider"></div>'
     + '<div style="display:flex;flex-direction:column;gap:6px;">' + esimsHtml + '</div>'
@@ -602,11 +606,11 @@ document.getElementById('sendBulkBtn').addEventListener('click', async () => {
     session_token: sessionToken,
     sheet_url: SHEET_URL,
     sheet_tab_name: SHEET_TAB_NAME,
-    order_source_type: orderSource === 'ots' ? 'OTS' : 'Other',
+    order_source_type: (SOURCES.find(s => s.code === orderSource) || {}).sheetValue || 'Other',
     mode: currentMode,
     manage_id: manageId,
     recipients: ready.map(r => ({
-      email: r.email.trim(), cc: r.cc.trim(), name: r.name.trim(), mail_language: r.mailLang,
+      email: r.email.trim(), cc: r.cc.trim(), name: r.name.trim(), mail_language: r.mailLang, memo: r.memo.trim(),
       esims: r.esims.map(es => ({
         partner_order_no: es.partnerOrderNo || '',
         reason: es.reason || '',
@@ -681,6 +685,7 @@ function renderHistory(){
     + '<td>' + esc(row.mail_lang) + '</td>'
     + '<td>' + esc(row.ref) + '</td>'
     + '<td>' + esc(row.package_name) + ' / ' + esc(row.iccid) + '</td>'
+    + '<td>' + esc(row.memo) + '</td>'
     + '</tr>'
   ).join('');
 }
@@ -688,8 +693,8 @@ function renderHistory(){
 document.getElementById('refreshHistoryBtn').addEventListener('click', fetchHistory);
 document.getElementById('exportCsvBtn').addEventListener('click', () => {
   if (historyData.length === 0){ showToast('出力する履歴がありません', 'error'); return; }
-  const headers = ['日時','注文元','管理番号','区分','メール','CC','顧客名','言語','パートナー番号/理由','プラン','ICCID'];
-  const rows = historyData.map(r => [r.time, r.source, r.manage_id, r.mode, r.email, r.cc, r.customer_name, r.mail_lang, r.ref, r.package_name, r.iccid]);
+  const headers = ['日時','注文元','管理番号','区分','メール','CC','顧客名','言語','パートナー番号/理由','プラン','ICCID','社内メモ'];
+  const rows = historyData.map(r => [r.time, r.source, r.manage_id, r.mode, r.email, r.cc, r.customer_name, r.mail_lang, r.ref, r.package_name, r.iccid, r.memo]);
   const csv = [headers].concat(rows).map(row =>
     row.map(v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"').join(',')
   ).join('\r\n');
