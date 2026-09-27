@@ -142,7 +142,6 @@
     <div class="login-form-panel">
       <div class="login-form-inner">
         <h2>ログイン</h2>
-        <div class="pill-row" id="loginModePills"></div>
         <div style="display:flex;flex-direction:column;gap:10px;">
           <input class="staff-input" type="text" id="loginId" placeholder="ID" autocomplete="username">
           <input class="staff-input" type="password" id="loginPassword" placeholder="パスワード" autocomplete="current-password">
@@ -160,7 +159,6 @@
       <h1>TabiSIM eSIM 発行ツール</h1>
       <p class="sub">複数のeSIMを最大10宛先までまとめて送信 - Google Sheets 連携</p>
       <p class="staffline">ログイン中: <span id="staffNameLabel"></span></p>
-      <div class="pill-row" id="appModePills" style="margin-top:12px;max-width:220px;"></div>
     </div>
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:10px;margin-top:36px;">
       <div style="display:flex;gap:8px;">
@@ -253,7 +251,6 @@ const PLAN_OPTIONS = ['1GB/7days', '3GB/15days', '3GB/30days', '5GB/30days', '10
 // ---- State ----
 let sessionToken = sessionStorage.getItem('tabisim_session_token') || null;
 let staffName = sessionStorage.getItem('tabisim_staff_name') || '';
-let currentMode = localStorage.getItem('tabisim_staff_mode') || 'purchase';
 let orderSource = 'ots';
 let manageId = '';
 let nextManageSeq = 1;
@@ -261,8 +258,9 @@ let nextRecipientId = 2;
 let recipients = [makeRecipient(1)];
 let historyData = [];
 
-function makeDraft(){ return { partnerOrderNo:'', reason:'campaign', iccid:'', apn:APN_OPTIONS[0], planName:PLAN_OPTIONS[0], lpaCode:'', qrDataUrl:'', iosLink:'' }; }
-function makeRecipient(id){ return { id, email:'', cc:'', name:'', mailLang:'ja', memo:'', esims:[], draft: makeDraft() }; }
+function makeDraft(){ return { reason:'campaign', iccid:'', apn:APN_OPTIONS[0], planName:PLAN_OPTIONS[0], lpaCode:'', qrDataUrl:'', iosLink:'' }; }
+// 2026-09-27: 新規購入/無償提供(mode)は一括送信全体ではなく、宛先ごとに選べるようにする
+function makeRecipient(id){ return { id, email:'', cc:'', name:'', mailLang:'ja', mode:'purchase', memo:'', esims:[], draft: makeDraft() }; }
 function formatManageId(seq, source){
   const src = SOURCES.find(s => s.code === source) || SOURCES[SOURCES.length - 1];
   return src.prefix + String(seq).padStart(7,'0');
@@ -329,22 +327,6 @@ function jsonpRequest(params){
 // =========================================================================
 // ログイン
 // =========================================================================
-function renderModePills(containerId){
-  const el = document.getElementById(containerId);
-  el.innerHTML = MODES.map(m =>
-    '<button type="button" class="mode-pill' + (currentMode===m.code?' active':'') + '" data-mode="' + m.code + '">' + m.label + '</button>'
-  ).join('');
-  el.querySelectorAll('[data-mode]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      currentMode = btn.getAttribute('data-mode');
-      localStorage.setItem('tabisim_staff_mode', currentMode);
-      renderModePills('loginModePills');
-      renderModePills('appModePills');
-      renderRecipients();
-    });
-  });
-}
-
 async function doLogin(){
   const username = document.getElementById('loginId').value.trim();
   const password = document.getElementById('loginPassword').value;
@@ -386,7 +368,6 @@ function showApp(){
   document.getElementById('loginScreen').classList.add('hidden');
   document.getElementById('appContent').classList.remove('hidden');
   document.getElementById('staffNameLabel').textContent = staffName;
-  renderModePills('appModePills');
   renderSourceRow();
   renderRecipients();
   fetchHistory();
@@ -397,7 +378,6 @@ function showLogin(){
   document.getElementById('loginId').value = '';
   document.getElementById('loginPassword').value = '';
   document.getElementById('loginError').textContent = '';
-  renderModePills('loginModePills');
 }
 
 // =========================================================================
@@ -440,8 +420,10 @@ function renderRecipients(){
 
   const ready = recipients.filter(r => r.email.trim() && r.esims.length > 0);
   const totalEsims = recipients.reduce((sum, r) => sum + r.esims.length, 0);
+  const freeCount = ready.filter(r => r.mode === 'free').length;
+  const purchaseCount = ready.length - freeCount;
   document.getElementById('sendNote').textContent =
-    (currentMode === 'free' ? '無償提供メールで送信されます' : '新規購入メールで送信されます')
+    '新規購入 ' + purchaseCount + '名 / 無償提供 ' + freeCount + '名'
     + ' ・ ' + ready.length + '名 / eSIM合計 ' + totalEsims + '件';
   const sendBtn = document.getElementById('sendBulkBtn');
   sendBtn.disabled = ready.length === 0;
@@ -456,11 +438,18 @@ function renderRecipientCard(r){
       ).join('')
     : '<span class="no-esim-note">まだeSIMが追加されていません</span>';
 
-  const refFieldHtml = currentMode === 'free'
+  const refFieldHtml = r.mode === 'free'
     ? '<select class="small-input" data-action="update-draft" data-field="reason" data-rid="' + r.id + '">'
         + REASONS.map(rs => '<option value="' + rs.code + '"' + (r.draft.reason===rs.code?' selected':'') + '>' + rs.label + '</option>').join('')
       + '</select>'
-    : '<input type="text" class="small-input" placeholder="パートナー注文番号" value="' + esc(r.draft.partnerOrderNo) + '" data-action="update-draft" data-field="partnerOrderNo" data-rid="' + r.id + '">';
+    : '';
+  const iccidFullWidth = r.mode !== 'free';
+
+  const modePillsHtml = '<div class="pill-row" style="margin-bottom:2px;">'
+    + MODES.map(m =>
+        '<button type="button" class="mode-pill' + (r.mode===m.code?' active':'') + '" data-action="set-mode" data-rid="' + r.id + '" data-mode="' + m.code + '">' + m.label + '</button>'
+      ).join('')
+    + '</div>';
 
   const qrPreviewHtml = r.draft.qrDataUrl
     ? '<div class="draft-qr-preview"><img src="' + r.draft.qrDataUrl + '" alt="QRコード"><span class="field-note">自動生成</span></div>'
@@ -473,6 +462,7 @@ function renderRecipientCard(r){
     + '<span class="badge">eSIM: ' + r.esims.length + '件</span>'
     + '<button class="icon-round" data-action="remove-recipient" data-rid="' + r.id + '">🗑</button>'
     + '</div></div>'
+    + modePillsHtml
     + '<div class="grid2">'
     + '<input type="email" class="small-input" placeholder="お客様メールアドレス" value="' + esc(r.email) + '" data-action="update-recipient" data-field="email" data-rid="' + r.id + '" style="grid-column:1/2;">'
     + '<input type="email" class="small-input" placeholder="CCメール" value="' + esc(r.cc) + '" data-action="update-recipient" data-field="cc" data-rid="' + r.id + '">'
@@ -487,7 +477,7 @@ function renderRecipientCard(r){
     + '<div style="display:flex;flex-direction:column;gap:6px;">' + esimsHtml + '</div>'
     + '<div class="grid2">'
     + refFieldHtml
-    + '<input type="text" class="small-input" placeholder="ICCID番号" value="' + esc(r.draft.iccid) + '" data-action="update-draft" data-field="iccid" data-rid="' + r.id + '">'
+    + '<input type="text" class="small-input" placeholder="ICCID番号" value="' + esc(r.draft.iccid) + '" data-action="update-draft" data-field="iccid" data-rid="' + r.id + '"' + (iccidFullWidth ? ' style="grid-column:1/-1;"' : '') + '>'
     + '<label style="display:flex;flex-direction:column;gap:3px;grid-column:1/-1;">'
     + '<span class="field-note">APN設定</span>'
     + '<select class="small-input" data-action="update-draft" data-field="apn" data-rid="' + r.id + '">'
@@ -549,6 +539,10 @@ document.getElementById('recipientsGrid').addEventListener('click', (e) => {
     recipients = recipients.filter(x => x.id !== rid);
     if (recipients.length === 0) recipients = [makeRecipient(nextRecipientId++)];
     renderRecipients();
+  } else if (action === 'set-mode'){
+    const r = recipients.find(x => x.id === rid);
+    if (r) r.mode = t.getAttribute('data-mode');
+    renderRecipients();
   } else if (action === 'remove-esim'){
     const r = recipients.find(x => x.id === rid);
     const ei = Number(t.getAttribute('data-eindex'));
@@ -562,7 +556,6 @@ document.getElementById('recipientsGrid').addEventListener('click', (e) => {
     const qrDataUrl = lpaCode ? (r.draft.qrDataUrl || generateQrDataUrl(lpaCode)) : '';
     const iosLink = lpaCode ? ('https://esimsetup.apple.com/esim_qrcode_provisioning?carddata=' + encodeURIComponent(lpaCode)) : '';
     r.esims.push({
-      partnerOrderNo: r.draft.partnerOrderNo,
       reason: r.draft.reason,
       iccid: r.draft.iccid,
       apn: r.draft.apn,
@@ -607,12 +600,10 @@ document.getElementById('sendBulkBtn').addEventListener('click', async () => {
     sheet_url: SHEET_URL,
     sheet_tab_name: SHEET_TAB_NAME,
     order_source_type: (SOURCES.find(s => s.code === orderSource) || {}).sheetValue || 'Other',
-    mode: currentMode,
     manage_id: manageId,
     recipients: ready.map(r => ({
-      email: r.email.trim(), cc: r.cc.trim(), name: r.name.trim(), mail_language: r.mailLang, memo: r.memo.trim(),
+      email: r.email.trim(), cc: r.cc.trim(), name: r.name.trim(), mail_language: r.mailLang, mode: r.mode, memo: r.memo.trim(),
       esims: r.esims.map(es => ({
-        partner_order_no: es.partnerOrderNo || '',
         reason: es.reason || '',
         iccid: es.iccid || '',
         apn: es.apn || '',
@@ -708,7 +699,6 @@ document.getElementById('exportCsvBtn').addEventListener('click', () => {
 // =========================================================================
 // 初期化
 // =========================================================================
-renderModePills('loginModePills');
 if (sessionToken){ showApp(); } else { showLogin(); }
 </script>
 </body>
