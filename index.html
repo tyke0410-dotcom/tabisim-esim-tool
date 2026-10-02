@@ -284,42 +284,35 @@ function generateQrDataUrl(text){
 }
 
 // =========================================================================
-// JSONP通信ヘルパー
-// GAS Web Appは外部ドメインからのfetch POSTだとCORSヘッダーが正しく返らないことが
-// あるため、ログイン/履歴取得はscriptタグ経由のJSONP(GET)で行い、この制限を回避する。
+// GAS通信ヘルパー(ログイン/履歴取得用・GET)
+// 以前はscriptタグ経由のJSONPで実装していたが、ブラウザにGoogleアカウントが
+// ログインしていると、GAS側のリダイレクトが「/u/N/」付きの内部パスに誤って
+// 振り分けられ404になる不具合が確認された(2026-10-02)。
+// credentials:'omit'のfetchはCookie(ログイン情報)を一切送らないため、この問題を
+// 回避できる。GAS側はcallbackパラメータが無い場合、素のJSONを返す仕様なので、
+// callbackは付けずに呼び出す。
 // =========================================================================
 function jsonpRequest(params){
-  return new Promise((resolve, reject) => {
-    const callbackName = 'tabisimCb_' + Date.now() + '_' + Math.floor(Math.random() * 100000);
-    const script = document.createElement('script');
-    let settled = false;
-    function cleanup(){
-      delete window[callbackName];
-      if (script.parentNode) script.parentNode.removeChild(script);
+  const qs = Object.keys(params).map(k => encodeURIComponent(k) + '=' + encodeURIComponent(params[k] == null ? '' : params[k])).join('&');
+  const url = GAS_URL + '?' + qs;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15000);
+
+  return fetch(url, { method: 'GET', credentials: 'omit', signal: controller.signal })
+    .then(res => res.text())
+    .then(text => {
       clearTimeout(timer);
-    }
-    window[callbackName] = (data) => {
-      if (settled) return;
-      settled = true;
-      resolve(data);
-      cleanup();
-    };
-    script.onerror = () => {
-      if (settled) return;
-      settled = true;
-      reject(new Error('GASへの接続に失敗しました'));
-      cleanup();
-    };
-    const qs = Object.keys(params).map(k => encodeURIComponent(k) + '=' + encodeURIComponent(params[k] == null ? '' : params[k])).join('&');
-    script.src = GAS_URL + '?' + qs + '&callback=' + callbackName;
-    document.body.appendChild(script);
-    var timer = setTimeout(() => {
-      if (settled) return;
-      settled = true;
-      reject(new Error('タイムアウトしました'));
-      cleanup();
-    }, 15000);
-  });
+      try {
+        return JSON.parse(text);
+      } catch (parseErr) {
+        throw new Error('GASからの応答を解析できませんでした');
+      }
+    })
+    .catch(err => {
+      clearTimeout(timer);
+      if (err.name === 'AbortError') throw new Error('タイムアウトしました');
+      throw new Error('GASへの接続に失敗しました');
+    });
 }
 
 // =========================================================================
