@@ -184,7 +184,10 @@
 
     <div class="section-head">
       <h2 id="recipientCountLabel">2. 宛先リスト (0/10)</h2>
-      <button class="add-recipient-btn" id="addRecipientBtn">＋ 宛先を追加</button>
+      <div style="display:flex;gap:8px;">
+        <button class="icon-btn" id="importWebsiteBtn">⇩ Website未処理注文を取り込む</button>
+        <button class="add-recipient-btn" id="addRecipientBtn">＋ 宛先を追加</button>
+      </div>
     </div>
 
     <div id="recipientsGrid"></div>
@@ -258,7 +261,8 @@ let historyData = [];
 
 function makeDraft(){ return { reason:'campaign', iccid:'', apn:APN_OPTIONS[0], planName:PLAN_OPTIONS[0], lpaCode:'', qrDataUrl:'', iosLink:'' }; }
 // 2026-09-27: 新規購入/無償提供(mode)は一括送信全体ではなく、宛先ごとに選べるようにする
-function makeRecipient(id){ return { id, email:'', cc:'', name:'', mailLang:'ja', mode:'purchase', memo:'', esims:[], draft: makeDraft() }; }
+// 2026-10-03: Website連携用にwebsiteOrderNumberを追加(Websiteの注文と紐付けるとeSIM送信時にICCIDが自動反映される)
+function makeRecipient(id){ return { id, email:'', cc:'', name:'', mailLang:'ja', mode:'purchase', memo:'', esims:[], draft: makeDraft(), websiteOrderNumber:'' }; }
 function formatManageId(seq, source){
   const src = SOURCES.find(s => s.code === source) || SOURCES[SOURCES.length - 1];
   return src.prefix + String(seq).padStart(7,'0');
@@ -446,10 +450,15 @@ function renderRecipientCard(r){
     ? '<div class="draft-qr-preview"><img src="' + r.draft.qrDataUrl + '" alt="QRコード"><span class="field-note">自動生成</span></div>'
     : '';
 
+  var websiteBadgeHtml = r.websiteOrderNumber
+    ? '<span class="badge" style="background:var(--cream-200);" title="eSIM送信時にこのWebsite注文のICCIDが自動反映されます">Web: ' + esc(r.websiteOrderNumber) + '</span>'
+    : '';
+
   return ''
     + '<div class="recipient-card">'
     + '<div class="recipient-head"><span class="title">宛先 ' + (recipients.indexOf(r)+1) + '</span>'
     + '<div style="display:flex;align-items:center;gap:10px;">'
+    + websiteBadgeHtml
     + '<span class="badge">eSIM: ' + r.esims.length + '件</span>'
     + '<button class="icon-round" data-action="remove-recipient" data-rid="' + r.id + '">🗑</button>'
     + '</div></div>'
@@ -462,6 +471,9 @@ function renderRecipientCard(r){
     + '<select class="small-input" data-action="update-recipient" data-field="mailLang" data-rid="' + r.id + '">'
     + MAIL_LANGS.map(l => '<option value="' + l.code + '"' + (r.mailLang===l.code?' selected':'') + '>' + l.label + '</option>').join('')
     + '</select><span class="field-note">※お客様に送るメールの言語です</span></label>'
+    + '<label style="display:flex;flex-direction:column;gap:3px;grid-column:1/-1;">'
+    + '<input type="text" class="small-input" placeholder="Website注文番号(OKN-xxxxxx・該当する場合のみ)" value="' + esc(r.websiteOrderNumber) + '" data-action="update-recipient" data-field="websiteOrderNumber" data-rid="' + r.id + '">'
+    + '<span class="field-note">※入力するとeSIM送信時にWebsiteのMy PageへICCIDが自動反映されます</span></label>'
     + '<textarea class="small-input" placeholder="社内メモ(お客様には送信されません)" rows="2" data-action="update-recipient" data-field="memo" data-rid="' + r.id + '" style="grid-column:1/-1;resize:vertical;">' + esc(r.memo) + '</textarea>'
     + '</div>'
     + '<div class="divider"></div>'
@@ -566,6 +578,47 @@ document.getElementById('addRecipientBtn').addEventListener('click', () => {
   renderRecipients();
 });
 
+// =========================================================================
+// Website未処理注文の取り込み (2026-10-03)
+// GAS経由でWebsite(Supabase)の「支払い済み・ICCID未設定」の注文一覧を取得し、
+// 宛先リストに自動で追加する。ここで取り込んだ宛先は、eSIM送信時に
+// websiteOrderNumberを使ってWebsiteのMy PageへICCIDが自動反映される。
+// =========================================================================
+document.getElementById('importWebsiteBtn').addEventListener('click', async () => {
+  if (!sessionToken) return;
+  try {
+    const json = await jsonpRequest({ api: 'pending_orders', session_token: sessionToken });
+    if (json.status === 'unauthorized'){ handleUnauthorized(); return; }
+    if (json.status !== 'success'){ showToast(json.message || 'Website注文の取得に失敗しました', 'error'); return; }
+
+    const existingOrderNumbers = new Set(recipients.map(r => r.websiteOrderNumber).filter(Boolean));
+    const pending = (json.data || []).filter(o => !existingOrderNumbers.has(o.order_number));
+    if (pending.length === 0){ showToast('取り込める未処理のWebsite注文はありません', 'info'); return; }
+
+    const blankSlots = recipients.filter(r => !r.email.trim() && r.esims.length === 0 && !r.websiteOrderNumber);
+    const capacity = 10 - (recipients.length - blankSlots.length);
+    if (capacity <= 0){ showToast('宛先リストが上限(10件)のため取り込めません', 'error'); return; }
+
+    recipients = recipients.filter(r => !blankSlots.includes(r));
+    const toImport = pending.slice(0, capacity);
+    toImport.forEach(o => {
+      const r = makeRecipient(nextRecipientId++);
+      r.email = o.email || '';
+      r.name = o.name || '';
+      r.websiteOrderNumber = o.order_number || '';
+      const guessedPlan = o.capacity_gb + 'GB/' + o.days + 'days';
+      if (PLAN_OPTIONS.indexOf(guessedPlan) !== -1) r.draft.planName = guessedPlan;
+      recipients.push(r);
+    });
+    if (recipients.length === 0) recipients = [makeRecipient(nextRecipientId++)];
+
+    renderRecipients();
+    showToast(toImport.length + '件のWebsite注文を取り込みました(ICCID等は別途ご入力ください)', 'success');
+  } catch(e){
+    showToast('取り込みエラー: ' + e.message, 'error');
+  }
+});
+
 document.getElementById('resetBtn').addEventListener('click', () => {
   orderSource = 'ots';
   manageId = '';
@@ -594,6 +647,7 @@ document.getElementById('sendBulkBtn').addEventListener('click', async () => {
     manage_id: manageId,
     recipients: ready.map(r => ({
       email: r.email.trim(), cc: r.cc.trim(), name: r.name.trim(), mail_language: r.mailLang, mode: r.mode, memo: r.memo.trim(),
+      website_order_number: (r.websiteOrderNumber || '').trim(),
       esims: r.esims.map(es => ({
         reason: es.reason || '',
         iccid: es.iccid || '',
